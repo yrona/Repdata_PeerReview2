@@ -1,0 +1,158 @@
+---
+title: "Reproducible Research Peer Assessment 2"
+author: "Yilmaz Rona"
+date: "October 20, 2015"
+output: html_document
+---
+
+```{r load_libraries, echo=FALSE, message=FALSE, warning=FALSE}
+## Loading and preprocessing the data
+#library(lubridate)
+library(plyr)
+#library(data.table)
+library(ggplot2)
+
+```
+
+
+```{r load_data, echo=FALSE}
+
+original_url <- "https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2"
+
+destdir <- paste(getwd(),"data",sep = "/")
+
+if (!file.exists(destdir)) {
+  dir.create(destdir)
+}
+
+downloaded_zip <- paste(destdir,"data.bz2",sep = "/")
+
+#uncompressed_data <- paste(destdir,"activity.csv",sep = "/")
+
+
+#download.file(original_url,downloaded_zip, method = "libcurl")
+
+download_size <- file.size(downloaded_zip)
+
+
+storm.data <- read.csv(downloaded_zip,header = TRUE,na.strings = "NA")
+destructive.events <- subset(storm.data, (FATALITIES > 0) | (INJURIES > 0) | (PROPDMG>0) | (CROPDMG > 0))
+
+
+weather.categories <- read.csv("WeatherCategories.csv")
+destructive.events <- join(destructive.events,weather.categories, type = "left", by = "EVTYPE", match = "first")
+
+
+damage.multipliers <- read.csv("DamageMultipliers.csv")
+
+weather.categories <- read.csv("WeatherCategories.csv")
+damage.multipliers <- read.csv("DamageMultipliers.csv")
+
+damage.multipliers.property <- rename(damage.multipliers, replace = c("Code" = "PROPDMGEXP", "Multiplier" = "PROPMULT") )
+
+destructive.events <- join(destructive.events,damage.multipliers.property, type = "left", by = "PROPDMGEXP", match = "first")
+
+damage.multipliers.crops <- rename(damage.multipliers, replace = c("Code" = "CROPDMGEXP", "Multiplier" = "CROPMULT") )
+destructive.events <- join(destructive.events,damage.multipliers.crops, type = "left", by = "CROPDMGEXP", match = "first")
+
+destructive.events$PROPDMGACTUAL <- destructive.events$PROPDMG *destructive.events$PROPMULT
+destructive.events$PROPDMGACTUAL[is.na(destructive.events$PROPDMGACTUAL)] <- 0
+
+destructive.events$CROPDMGACTUAL <- destructive.events$CROPDMG *destructive.events$CROPMULT
+destructive.events$CROPDMGACTUAL[is.na(destructive.events$CROPDMGACTUAL)] <- 0
+
+destructive.events$TOTALDAMAGE <- destructive.events$PROPDMGACTUAL + destructive.events$CROPDMGACTUAL
+
+destruction.temperature <- subset(rename(ddply(destructive.events,.(EVENTTEMP),summarize,FATALITIES=sum(FATALITIES,na.rm = TRUE),INJURIES=sum(INJURIES,na.rm = TRUE),ECONDAMAGE=sum(TOTALDAMAGE,na.rm = TRUE)), replace = c("EVENTTEMP" = "EVENT") ),EVENT != "")
+
+destruction.precipitation <- subset(rename(ddply(destructive.events,.(EVENTPRECIP),summarize,FATALITIES=sum(FATALITIES,na.rm = TRUE),INJURIES=sum(INJURIES,na.rm = TRUE),ECONDAMAGE=sum(TOTALDAMAGE,na.rm = TRUE)), replace = c("EVENTPRECIP" = "EVENT") ),EVENT != "")
+
+destruction.all <- join(destruction.temperature,destruction.precipitation, type = "full", by = "EVENT")
+
+destruction.wind <- subset(rename(ddply(destructive.events,.(EVENTWIND),summarize,FATALITIES=sum(FATALITIES,na.rm = TRUE),INJURIES=sum(INJURIES,na.rm = TRUE),ECONDAMAGE=sum(TOTALDAMAGE,na.rm = TRUE)), replace = c("EVENTWIND" = "EVENT") ),EVENT != "")
+
+destruction.all <- join(destruction.all,destruction.wind, type = "full", by = "EVENT")
+
+
+destruction.electrical <- subset(rename(ddply(destructive.events,.(EVENTELECTRICAL),summarize,FATALITIES=sum(FATALITIES,na.rm = TRUE),INJURIES=sum(INJURIES,na.rm = TRUE),ECONDAMAGE=sum(TOTALDAMAGE,na.rm = TRUE)), replace = c("EVENTELECTRICAL" = "EVENT") ),EVENT != "")
+
+destruction.all <- join(destruction.all,destruction.electrical, type = "full", by = "EVENT")
+
+destruction.flooding <- subset(rename(ddply(destructive.events,.(EVENTFLOOD),summarize,FATALITIES=sum(FATALITIES,na.rm = TRUE),INJURIES=sum(INJURIES,na.rm = TRUE),ECONDAMAGE=sum(TOTALDAMAGE,na.rm = TRUE)), replace = c("EVENTFLOOD" = "EVENT") ),EVENT != "")
+
+destruction.all <- join(destruction.all,destruction.flooding, type = "full", by = "EVENT")
+
+destruction.seas <- subset(rename(ddply(destructive.events,.(EVENTSEAS),summarize,FATALITIES=sum(FATALITIES,na.rm = TRUE),INJURIES=sum(INJURIES,na.rm = TRUE),ECONDAMAGE=sum(TOTALDAMAGE,na.rm = TRUE)), replace = c("EVENTSEAS" = "EVENT") ),EVENT != "")
+
+destruction.all <- join(destruction.all,destruction.seas, type = "full", by = "EVENT")
+
+destruction.erosion <- subset(rename(ddply(destructive.events,.(EVENT.EROSION),summarize,FATALITIES=sum(FATALITIES,na.rm = TRUE),INJURIES=sum(INJURIES,na.rm = TRUE),ECONDAMAGE=sum(TOTALDAMAGE,na.rm = TRUE)), replace = c("EVENT.EROSION" = "EVENT") ),EVENT != "")
+
+destruction.all <- join(destruction.all,destruction.erosion, type = "full", by = "EVENT")
+
+destruction.combustion <- subset(rename(ddply(destructive.events,.(EVENTCOMBUSTION),summarize,FATALITIES=sum(FATALITIES,na.rm = TRUE),INJURIES=sum(INJURIES,na.rm = TRUE),ECONDAMAGE=sum(TOTALDAMAGE,na.rm = TRUE)), replace = c("EVENTCOMBUSTION" = "EVENT") ),EVENT != "")
+
+destruction.all <- join(destruction.all,destruction.combustion, type = "full", by = "EVENT")
+
+destruction.summary <- data.frame(category = c("Temperature","Precipitation","Winds","Electrical","Flooding","Maritime","Erosion","Combustion"))
+
+#Convert dates into dates
+#activity_data$date <- strptime(activit
+
+```
+
+#Data Analysis
+
+[The original dataset is published on the Internet[`r format(structure(download_size, class="object_size"), units="auto")`].](`r original_url`)
+
+If one inspects the original data set, one observes that the EVTYPE field is poorly validated; Spelling errors and capitalization differences and non standard terminology abound.  Through inspection of the data set, I generated a mapping of each meaningful event entry into a handful of different event categories.  The types of events are Temperature Events, Precipitation Events, Wind Events, Electrical Events, Flooding Events, Maritime Events, Erosion Events and Combustion Events.
+
+It is important to note that the same incident can appear in multiple categories, if, for example, a person is struck by lightning during a thunderstorm, their death will be tabulated as a fatality associated with a lightning event and as a fatality associated with thunderstorms.
+
+In calculating economic damage, the dollar amounts of crop damage and property damage were added together.  To find the property and crop damage, we used the exponent mapping below:
+
+
+```{r displayexponents, echo=FALSE}
+
+  print(damage.multipliers)
+
+```
+
+#Results
+
+## Types of Events
+
+```{r displaysummary, echo=FALSE}
+
+  print(destruction.summary)
+
+```
+
+Unsurprisingly, the most dangerous events to life and limb are events that come on suddenly where people are unlikely to have time to evacuate: weather events related to winds, precipitation or extremes of heat or cold.  Conversely economic damage is more associated with events of great energy and long duration, dominated by flooding, winds and then precipitation.
+
+## Specific Hazards
+In order to examine which specific events cause the greatest economic damage and cause the most deaths, the fatalities and economic damage for each of the specific categories developed during the mapping above were combined in a single table, listing each category along with the fatalities and economic damage associated with each.
+
+
+The greatest hazards to life based on historical fatalities are charted below:
+
+```{r, echo=FALSE}
+fatality.plot.data <- subset(destruction.all,FATALITIES>500)
+arrange(subset(destruction.all,FATALITIES>500),desc(FATALITIES))
+fatality.plot.data$EVENT <- factor(fatality.plot.data$EVENT, levels = fatality.plot.data$EVENT[order(-fatality.plot.data$FATALITIES)])
+ggplot(fatality.plot.data, aes(x=EVENT,y=FATALITIES))+ geom_bar(stat="identity") + scale_y_continuous("Fatalities") + scale_x_discrete("Event") + coord_flip()
+
+
+```
+
+The greatest hazards to property and crops are charted below:
+
+```{r, echo=FALSE}
+econ.plot.data <- subset(destruction.all,ECONDAMAGE>1e10)
+econ.plot.data$EVENT <- factor(econ.plot.data$EVENT, levels = econ.plot.data$EVENT[order(-econ.plot.data$ECONDAMAGE)])
+ ggplot(econ.plot.data, aes(x=EVENT,y=ECONDAMAGE))+ geom_bar(stat="identity") + scale_y_continuous("Economic Damage") + scale_x_discrete("Event") + coord_flip()
+
+
+```
+
+For the emergency planner, flash floods, hurricanes and tornados are the greatest threats to property.  Coastal areas are at greatest risk, with additional dangers posed by storm surges.  The greatest threats to life and limb are due to tornados, which can strike with little warning, followed by heat waves, drought, and flash floods.
